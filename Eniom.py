@@ -39,31 +39,54 @@ white_counter_threshold = 3.5
 
 stato_precedente = None
 
+cyberpi.led.off()
+
 def trovato_verde():
     return colore("L2") == "green" or colore("L1") == "green" or colore("R2") == "green" or colore("R1") == "green"
     
+def doppioverde():
+    cyberpi.led.show("g g g g g")
+    mbot.turn(270)
+    mbot.straight(7, speed=15)
+    cyberpi.led.off()
+    
+def trovato_linea():
+    return sensor.get_line_sta() != 15
+
 def gestisci_verde():
     sx_verde = colore("L2") == "green" or colore("L1") == "green"
     dx_verde = colore("R2") == "green" or colore("R1") == "green"
     
     if sx_verde and dx_verde:
-        cyberpi.led.show("g g g g g")
-        mbot.turn(270)
-        mbot.straight(7, speed=15)
-        cyberpi.led.off()
+        doppioverde()
+        
         return
     elif sx_verde:
-        cyberpi.led.show("g g k k k")
-        mbot.turn(-80)
-        mbot.straight(6, speed=15)
-        cyberpi.led.off()
-        return
+        mbot.straight(1, speed=5)
+        
+        if sx_verde and dx_verde:
+            doppioverde()
+            
+            return
+        else:
+            cyberpi.led.show("g g k k k")
+            mbot.turn(-80)
+            mbot.straight(6, speed=15)
+            cyberpi.led.off()
+            return
     elif dx_verde:
-        cyberpi.led.show("k k k g g")
-        mbot.turn(80)
-        mbot.straight(6, speed=15)
-        cyberpi.led.off()
-        return
+        mbot.straight(1, speed=5)
+        
+        if sx_verde and dx_verde:
+            doppioverde()
+            
+            return
+        else:
+            cyberpi.led.show("k k k g g")
+            mbot.turn(80)
+            mbot.straight(6, speed=15)
+            cyberpi.led.off()
+            return
 
 def recupero_linea():
     global white_counter, white_counter_threshold
@@ -75,31 +98,29 @@ def recupero_linea():
     
         mbot.turn(-45)
     
-        if sensor.get_line_sta() != 15:
+        if trovato_linea():
             white_counter = 0
             cyberpi.led.off()
+    
             return
     
         mbot.turn(90)
     
-        if sensor.get_line_sta() != 15:
+        if trovato_linea():
             white_counter = 0
             cyberpi.led.off()
+
             return
         
         mbot.turn(-45)
         
-        if sensor.get_line_sta() != 15:
+        if trovato_linea():
             white_counter = 0
             cyberpi.led.off()
+
             return
         
         mbot.straight(-5, 20)
-        
-        cyberpi.led.off()
-        
-    
-    cyberpi.led.off()
 
 def gestisce_stato_linea(stato, stato_precedente):
     global current_speed
@@ -108,6 +129,11 @@ def gestisce_stato_linea(stato, stato_precedente):
     if colore("L1") == "red" or colore("R1") == "red" or colore("L2") == "red" or colore("R2") == "red":
         cyberpi.audio.play("beeps")
         mbot.forward(0)
+        
+        cyberpi.led.show("c c c c c")
+        
+        exit()
+        
         return
     
     # ── VERDE: gestione direzione ──────────────────────────────────────
@@ -125,14 +151,11 @@ def gestisce_stato_linea(stato, stato_precedente):
         current_speed = VEL_CROCIERA
         mbot.drive_speed(15, -30)
     elif stato == 3:
-        #current_speed = VEL_CROCIERA
-        #mbot.drive_speed(5, -40)
         mbot.turn(-35)
     elif stato == 13:  # destra
         current_speed = VEL_CROCIERA
         mbot.drive_speed(30, -15)
     elif stato == 12:
-        #mbot.drive_speed(50, -5)
         mbot.turn(35)
     elif stato == 8:  # 90 gradi destra
         mbot.straight(3, speed=20)
@@ -150,10 +173,8 @@ def gestisce_stato_linea(stato, stato_precedente):
             mbot.turn(-90)
     elif stato == 14:  # curva stretta destra
         mbot.turn(15)
-        #mbot.drive_speed(110, -0)
     elif stato == 7:  # curva stretta sinistra
         mbot.turn(-15)
-        #mbot.drive_speed(0, -110)
     elif stato == 5:
         mbot.turn(10)
     elif stato == 10:
