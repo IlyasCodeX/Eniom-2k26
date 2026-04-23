@@ -24,7 +24,7 @@ colore = cyberpi.quad_rgb_sensor.get_color_sta
 # Parametri di velocità
 VEL_CROCIERA = 5
 VEL_MAX = 15
-ACCELERAZIONE = 1.7
+ACCELERAZIONE = 3
 
 # Parametri gap
 DISTANZA_BASE = 3
@@ -146,6 +146,7 @@ def gestisce_stato_linea(stato, stato_precedente):
         else:
             if current_speed < VEL_MAX:
                 current_speed += ACCELERAZIONE
+                
             mbot.drive_speed(current_speed, -current_speed)
     elif stato == 11:  # sinistra
         current_speed = VEL_CROCIERA
