@@ -1,25 +1,104 @@
 import cyberpi, time
 
-# NOTA IMPORTANTE:
-# gli stati linea quando viene uploadato il 
-# codice sono invertiti rispetto alla documentazione:
-# 
-# stato 0:
-#   docs:
-#       [N][N][N][N]
-# 
-#   stato effettivo:
-#       [B][B][B][B]
-#
-# invece quando viene runnato normalmente (quindi con 
-# il tasto "run") gli stati sono gli stessi delle docs
-#
-# link delle docs: 
-# https://www.yuque.com/makeblock-help-center-en/mcode/cyberpi-api-mbuild
+"""
+Questo è il codice principale del line follower di Eniom,
+il robot che abbiamo usato alla robocup non usa il PID perché
+non c'è stato tempo di implementarlo, ma invece controlla ogni stato
+e fa delle azioni di conseguenza, usa dei led per segnalare
+quando ha trovato il verde, l'ostacolo oppure quando parte
+l'algoritmo di ricerca della linea.
+
+Al robot sono collegati dei led, quelli servono per avere una illuminazione
+migliore nei sensori.
+
+l'algoritmo di ricerca della linea funziona in questo modo (pseudo codice):
+
+```py
+funzione recupero_linea():
+    Imposta LED rossi
+
+    Ripeti all'infinito:
+        
+        Ferma il robot
+        
+        Ruota leggermente a sinistra (-45°)
+        
+        Se la linea viene trovata:
+            Resetta contatore bianco
+            Spegni LED
+            Termina funzione
+        
+        Ruota a destra (+90° rispetto alla posizione attuale)
+        
+        Se la linea viene trovata:
+            Resetta contatore bianco
+            Spegni LED
+            Termina funzione
+        
+        Ruota di nuovo a sinistra (-45°) per tornare al centro
+        
+        Se la linea viene trovata:
+            Resetta contatore bianco
+            Spegni LED
+            Termina funzione
+        
+        Muovi il robot indietro
+
+Inizializza contatore_bianco a 0
+Imposta soglia_contatore_bianco a 3.5
+
+Ripeti all'infinito:
+    Leggi stato_linea dal sensore
+
+    Se stato_linea è uguale a 15 (linea non rilevata / tutto bianco):
+        Finché stato_linea rimane 15:
+            Se contatore_bianco è maggiore o uguale alla soglia:
+                Resetta contatore_bianco a 0
+                Chiama funzione recupero_linea()
+        
+                Esci dal ciclo interno
+            
+            Muovi il robot in avanti a velocità 15
+            Incrementa contatore_bianco di 0.1
+        
+            Stampa il valore del contatore
+            Pulisci la console
+            
+            Aggiorna stato_linea leggendo di nuovo il sensore
+        
+        Dopo il ciclo:
+            Se contatore_bianco ha raggiunto o superato la soglia:
+                Resetta contatore_bianco a 0
+                Chiama funzione recupero_linea()
+```
+
+---
+
+NOTA IMPORTANTE:
+gli stati linea quando viene uploadato il 
+codice sono invertiti rispetto alla documentazione:
+
+stato 0:
+  docs:
+      [N][N][N][N]
+
+  stato effettivo:
+      [B][B][B][B]
+
+invece quando viene runnato normalmente (quindi con 
+il tasto "run") gli stati sono gli stessi delle docs
+
+link delle docs: 
+https://www.yuque.com/makeblock-help-center-en/mcode/cyberpi-api-mbuild
+"""
 
 mbot = cyberpi.mbot2
 sensor = cyberpi.quad_rgb_sensor
 colore = cyberpi.quad_rgb_sensor.get_color_sta
+
+verde = cyberpi.quad_rgb_sensor.get_green
+rosso = cyberpi.quad_rgb_sensor.get_red
+blu = cyberpi.quad_rgb_sensor.get_blue
 
 # Parametri di velocità
 VEL_CROCIERA = 5
@@ -39,10 +118,70 @@ white_counter_threshold = 3.5
 
 stato_precedente = None
 
+# Range verdi: per una migliore ricognizione del verde
+# Ecco i valori catturati dal robot:
+# Destra:
+#   rosso = 63.201
+#   verde = 246.067
+#   blu = 110.155
+verde_minimo_rosso_destra = 43
+verde_minimo_verde_destra = 226
+verde_minimo_blu_destra = 80
+
+verde_massimo_rosso_destra = 80
+verde_massimo_verde_destra = 255
+verde_massimo_blu_destra = 130
+
+# Sinistro:
+#   rosso = 99.832
+#   verde = 254.909
+#   blu = 150.117
+verde_minimo_rosso_sinistra = 79
+verde_minimo_verde_sinistra = 234
+verde_minimo_blu_sinistra = 130
+
+verde_massimo_rosso_sinistra = 119
+verde_massimo_verde_sinistra = 255
+verde_massimo_blu_sinistra = 170
+
+# Così  è sicuro che i led sono spenti all'accensione del robot
 cyberpi.led.off()
 
+def compreso(valore, minimo, massimo):
+    return minimo <= valore <= massimo
+
+def verde_sinistra():
+    return (
+        (
+            compreso(rosso("L2"), verde_minimo_rosso_sinistra, verde_massimo_rosso_sinistra)
+            and compreso(verde("L2"), verde_minimo_verde_sinistra, verde_massimo_verde_sinistra)
+            and compreso(blu("L2"), verde_minimo_blu_sinistra, verde_massimo_blu_sinistra)
+        )
+            or
+        (
+            compreso(rosso("L1"), verde_minimo_rosso_sinistra, verde_massimo_rosso_sinistra)
+            and compreso(verde("L1"), verde_minimo_verde_sinistra, verde_massimo_verde_sinistra)
+            and compreso(blu("L1"), verde_minimo_blu_sinistra, verde_massimo_blu_sinistra)
+        )
+    )
+
+def verde_destra():
+    return (
+        (
+            compreso(rosso("R2"), verde_minimo_rosso_sinistra, verde_massimo_rosso_sinistra)
+            and compreso(verde("R2"), verde_minimo_verde_sinistra, verde_massimo_verde_sinistra)
+            and compreso(blu("R2"), verde_minimo_blu_sinistra, verde_massimo_blu_sinistra)
+        )    
+            or
+        (
+            compreso(rosso("R1"), verde_minimo_rosso_sinistra, verde_massimo_rosso_sinistra)
+            and compreso(verde("R1"), verde_minimo_verde_sinistra, verde_massimo_verde_sinistra)
+            and compreso(blu("R1"), verde_minimo_blu_sinistra, verde_massimo_blu_sinistra)
+        )        
+    )
+
 def trovato_verde():
-    return colore("L2") == "green" or colore("L1") == "green" or colore("R2") == "green" or colore("R1") == "green"
+    return verde_destra() or verde_sinistra()
     
 def doppioverde():
     cyberpi.led.show("g g g g g")
@@ -54,17 +193,14 @@ def trovato_linea():
     return sensor.get_line_sta() != 15
 
 def gestisci_verde():
-    sx_verde = colore("L2") == "green" or colore("L1") == "green"
-    dx_verde = colore("R2") == "green" or colore("R1") == "green"
-    
-    if sx_verde and dx_verde:
+    if verde_sinistra() and verde_destra():
         doppioverde()
         
         return
-    elif sx_verde:
-        mbot.straight(1, speed=5)
+    elif verde_sinistra():
+        mbot.straight(0.9, speed=5)
         
-        if sx_verde and dx_verde:
+        if verde_destra():
             doppioverde()
             
             return
@@ -74,10 +210,10 @@ def gestisci_verde():
             mbot.straight(6, speed=15)
             cyberpi.led.off()
             return
-    elif dx_verde:
-        mbot.straight(1, speed=5)
+    elif verde_destra():
+        mbot.straight(0.9, speed=5)
         
-        if sx_verde and dx_verde:
+        if verde_sinistra():
             doppioverde()
             
             return
@@ -132,12 +268,11 @@ def gestisce_stato_linea(stato, stato_precedente):
         
         cyberpi.led.show("c c c c c")
         
-        exit()
-        
         return
     
     # ── VERDE: gestione direzione ──────────────────────────────────────
-    gestisci_verde()
+    if trovato_verde():
+        gestisci_verde()
     
     # ── STATO LINEA ────────────────────────────────────────────────────
     if stato == 9:  # dritto
